@@ -5,18 +5,25 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Lingua Reader</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=Lora:ital,wght@0,400..700;1,400..700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
         theme: {
           extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+              serif: ['Lora', 'serif'],
+            },
             colors: {
-              'primary': '#4f46e5',
-              'secondary': '#10b981',
-              'light-bg': '#f8fafc',
-              'dark-text': '#1f2937',
-              'medium-text': '#4b5563',
-              'light-text': '#9ca3af',
+              'primary': '#4338ca', // A deeper indigo
+              'secondary': '#059669', // A richer emerald
+              'light-bg': '#f9fafb', // Slightly warmer light gray
+              'dark-text': '#111827', // Almost black for high contrast
+              'medium-text': '#374151',
+              'light-text': '#6b7280',
             },
           }
         }
@@ -33,7 +40,7 @@
 }
 </script>
 </head>
-  <body class="bg-light-bg text-dark-text">
+  <body class="bg-light-bg text-dark-text font-sans antialiased">
     <div id="root"></div>
     <script type="module" src="/index.js"></script>
   </body>

@@ -1,19 +1,24 @@
 import React, { useMemo } from 'react';
 import type { Vocabulary } from '../types';
 import { WordStatus } from '../types';
+import { LightbulbIcon, BrainIcon, CheckCircleIcon } from './IconComponents';
 
 interface VocabularyPageProps {
   vocabulary: Vocabulary;
   onGoHome: () => void;
+  language: string;
 }
 
-const WordColumn: React.FC<{ title: string; words: string[]; colorClass: string; }> = ({ title, words, colorClass }) => (
-  <div className="flex flex-col bg-white rounded-xl shadow-lg p-6">
+const WordColumn: React.FC<{ title: string; words: string[]; colorClass: string; icon: React.ReactNode }> = ({ title, words, colorClass, icon }) => (
+  <div className="flex flex-col bg-white rounded-xl shadow-lg p-6 ring-1 ring-black/5">
     <div className={`flex justify-between items-center pb-3 mb-4 border-b-2 ${colorClass}`}>
-      <h3 className="text-xl font-bold text-dark-text">{title}</h3>
-      <span className="font-bold text-lg text-medium-text">{words.length}</span>
+        <div className="flex items-center gap-3">
+            {icon}
+            <h3 className="text-xl font-bold text-dark-text">{title}</h3>
+        </div>
+      <span className="font-bold text-lg text-medium-text bg-gray-100 px-2 rounded-md">{words.length}</span>
     </div>
-    <div className="flex-grow overflow-y-auto pr-2">
+    <div className="flex-grow overflow-y-auto pr-2 -mr-2">
       {words.length > 0 ? (
         <ul className="space-y-2">
           {words.map(word => (
@@ -29,14 +34,16 @@ const WordColumn: React.FC<{ title: string; words: string[]; colorClass: string;
   </div>
 );
 
-export const VocabularyPage: React.FC<VocabularyPageProps> = ({ vocabulary, onGoHome }) => {
+export const VocabularyPage: React.FC<VocabularyPageProps> = ({ vocabulary, onGoHome, language }) => {
 
   const { newWords, learningWords, knownWords } = useMemo(() => {
     const newWords: string[] = [];
     const learningWords: string[] = [];
     const knownWords: string[] = [];
 
-    vocabulary.forEach((status, word) => {
+    const vocabEntries = Array.from(vocabulary.entries());
+
+    vocabEntries.forEach(([word, status]) => {
       switch (status) {
         case WordStatus.New:
           newWords.push(word);
@@ -50,7 +57,6 @@ export const VocabularyPage: React.FC<VocabularyPageProps> = ({ vocabulary, onGo
       }
     });
 
-    // Sort them alphabetically for consistent display
     return {
       newWords: newWords.sort((a,b) => a.localeCompare(b)),
       learningWords: learningWords.sort((a,b) => a.localeCompare(b)),
@@ -60,22 +66,22 @@ export const VocabularyPage: React.FC<VocabularyPageProps> = ({ vocabulary, onGo
 
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 lg:p-8">
+    <div className="min-h-screen bg-gray-50 from-white to-gray-50 bg-gradient-to-br p-4 lg:p-8">
       <div className="max-w-7xl mx-auto">
         <header className="flex items-center justify-between mb-8">
-          <h1 className="text-4xl font-bold text-primary">My Vocabulary</h1>
+          <h1 className="text-4xl font-bold text-primary">My {language} Vocabulary</h1>
           <button
             onClick={onGoHome}
             className="px-5 py-2 bg-indigo-100 text-primary font-semibold rounded-lg hover:bg-indigo-200 transition-colors"
           >
-            Back to Home
+            Back to Hub
           </button>
         </header>
 
         <main className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8" style={{maxHeight: 'calc(100vh - 150px)', minHeight: '400px'}}>
-            <WordColumn title="New" words={newWords} colorClass="border-blue-400" />
-            <WordColumn title="Learning" words={learningWords} colorClass="border-yellow-400" />
-            <WordColumn title="Known" words={knownWords} colorClass="border-green-500" />
+            <WordColumn title="Learning" words={learningWords} colorClass="border-yellow-400" icon={<BrainIcon className="w-6 h-6 text-yellow-500" />}/>
+            <WordColumn title="Known" words={knownWords} colorClass="border-green-500" icon={<CheckCircleIcon className="w-6 h-6 text-green-500" />} />
+            <WordColumn title="New" words={newWords} colorClass="border-blue-400" icon={<LightbulbIcon className="w-6 h-6 text-blue-500" />} />
         </main>
       </div>
     </div>

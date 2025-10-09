@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import type { Vocabulary, Word } from '../types';
 import { WordStatus } from '../types';
@@ -8,41 +7,64 @@ interface ReadingPanelProps {
   vocabulary: Vocabulary;
   onWordClick: (word: Word) => void;
   selectedWord: Word | null;
+  spokenWordNormalized: string | null;
 }
 
-const getStatusColorClass = (status: WordStatus) => {
+const getStatusHighlightClass = (status: WordStatus) => {
   switch (status) {
     case WordStatus.Learning:
-      return 'border-b-2 border-yellow-400';
+      return 'bg-yellow-400/30';
     case WordStatus.Known:
-      return 'border-b-2 border-green-500';
+      return 'bg-green-500/30';
     case WordStatus.New:
     default:
-      return 'border-b-2 border-transparent hover:border-blue-400';
+      return 'hover:bg-blue-400/20';
   }
 };
 
 const isWord = (text: string): boolean => /^[a-zA-ZÀ-ÿ'-]+$/.test(text);
 
-export const ReadingPanel: React.FC<ReadingPanelProps> = ({ text, vocabulary, onWordClick, selectedWord }) => {
+export const ReadingPanel: React.FC<ReadingPanelProps> = ({ text, vocabulary, onWordClick, selectedWord, spokenWordNormalized }) => {
 
   const parsedText = useMemo(() => {
     // This regex splits the text into words (including apostrophes/hyphens) and non-word characters (spaces, punctuation).
     return text.split(/([\w'-]+|[^\w'-]+)/g).filter(part => part);
   }, [text]);
 
+  const processedWords = new Set<string>();
+
   return (
-    <div className="p-8 lg:p-12 bg-white rounded-lg shadow-lg overflow-y-auto h-full">
+    <div className="p-8 lg:p-12 bg-white rounded-xl shadow-lg overflow-y-auto h-full ring-1 ring-black/5">
       <p className="text-xl md:text-2xl leading-relaxed font-serif text-gray-800" style={{ whiteSpace: 'pre-wrap' }}>
         {parsedText.map((part, index) => {
           if (isWord(part)) {
             const normalized = part.toLowerCase();
+
+            // If this word has been processed already, render it as plain text.
+            if (processedWords.has(normalized)) {
+                return <span key={index}>{part}</span>;
+            }
+            
+            // Mark the word as processed for subsequent encounters in this text.
+            processedWords.add(normalized);
+
             const status = vocabulary.get(normalized) || WordStatus.New;
             const isSelected = selectedWord?.normalized === normalized;
+            const isSpoken = spokenWordNormalized === normalized;
+
+            let highlightClass: string;
+            if (isSpoken) {
+                highlightClass = 'bg-purple-400/40';
+            } else if (isSelected) {
+                highlightClass = 'bg-primary/30';
+            } else {
+                highlightClass = getStatusHighlightClass(status);
+            }
+
             return (
               <span
                 key={index}
-                className={`cursor-pointer transition-colors duration-150 ${getStatusColorClass(status)} ${isSelected ? 'bg-blue-200' : ''}`}
+                className={`cursor-pointer transition-colors duration-150 rounded-md px-1 -mx-1 ${highlightClass}`}
                 onClick={() => onWordClick({ text: part, normalized, definition: null })}
               >
                 {part}

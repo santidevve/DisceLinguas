@@ -1,9 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { WordStatus } from '../types';
 import type { Word } from '../types';
 import { SpinnerIcon, BookOpenIcon, SpeakerIcon } from './IconComponents';
-import { getLanguageCode } from '../constants';
+import { ttsService } from '../services/ttsService';
 
 interface WordDetailPanelProps {
   word: Word | null;
@@ -18,15 +17,16 @@ const StatusButton: React.FC<{
   buttonStatus: WordStatus;
   label: string;
   colorClass: string;
-}> = ({ onClick, currentStatus, buttonStatus, label, colorClass }) => {
+  activeColorClass: string;
+}> = ({ onClick, currentStatus, buttonStatus, label, colorClass, activeColorClass }) => {
   const isActive = currentStatus === buttonStatus;
   return (
     <button
       onClick={onClick}
-      className={`flex-1 p-2 text-sm font-semibold rounded-md transition-all duration-200 ${
+      className={`flex-1 p-2 text-sm font-semibold rounded-lg transition-all duration-200 border-2 ${
         isActive
-          ? `${colorClass} text-white shadow-md`
-          : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+          ? `${activeColorClass} text-white shadow-md`
+          : `bg-white ${colorClass} hover:bg-gray-100`
       }`}
     >
       {label}
@@ -40,38 +40,29 @@ export const WordDetailPanel: React.FC<WordDetailPanelProps> = ({ word, isLoadin
   useEffect(() => {
     // Cleanup: stop any speech when the word changes or component unmounts.
     return () => {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
+      ttsService.stop();
       setIsSpeaking(false);
     };
   }, [word]);
 
   const handleSpeak = () => {
-    if (!word || !('speechSynthesis' in window)) {
-      console.warn('Speech synthesis not supported or no word selected.');
+    if (!word) {
       return;
     }
 
-    // Cancel any ongoing speech before starting a new one
-    window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(word.text);
-    utterance.lang = getLanguageCode(language);
-    
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = (event) => {
-        console.error('Speech synthesis error:', event.error);
+    ttsService.speak(word.text, language, {
+      onStart: () => setIsSpeaking(true),
+      onEnd: () => setIsSpeaking(false),
+      onError: (error) => {
+        console.error('Speech synthesis error:', error);
         setIsSpeaking(false);
-    };
-
-    window.speechSynthesis.speak(utterance);
+      }
+    });
   };
 
   if (!word) {
     return (
-      <div className="flex flex-col items-center justify-center h-full bg-white p-6 rounded-lg shadow-lg text-center">
+      <div className="flex flex-col items-center justify-center h-full bg-white p-6 rounded-xl shadow-lg ring-1 ring-black/5 text-center">
         <BookOpenIcon className="w-16 h-16 text-gray-300 mb-4" />
         <h3 className="text-xl font-semibold text-medium-text">Select a word</h3>
         <p className="text-light-text mt-1">Click on any word in the text to see its definition and track your progress.</p>
@@ -79,8 +70,10 @@ export const WordDetailPanel: React.FC<WordDetailPanelProps> = ({ word, isLoadin
     );
   }
 
+  const { definition, exampleSentence, exampleTranslation } = word.definition || {};
+
   return (
-    <div className="flex flex-col h-full bg-white p-6 rounded-lg shadow-lg">
+    <div className="flex flex-col h-full bg-white p-6 rounded-xl shadow-lg ring-1 ring-black/5">
       <div className="flex items-center gap-3 mb-4">
         <h2 className="text-4xl font-bold text-primary break-words">{word.text}</h2>
         <button
@@ -93,13 +86,21 @@ export const WordDetailPanel: React.FC<WordDetailPanelProps> = ({ word, isLoadin
           <SpeakerIcon className={`w-7 h-7 ${isSpeaking ? 'text-primary animate-pulse' : ''}`} />
         </button>
       </div>
-      <div className="flex-grow overflow-y-auto mb-4 pr-2">
+      <div className="flex-grow overflow-y-auto mb-4 pr-2 space-y-4">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <SpinnerIcon className="w-12 h-12 text-primary" />
           </div>
         ) : (
-          <p className="text-medium-text whitespace-pre-wrap">{word.definition || 'No definition found.'}</p>
+          <>
+            <p className="text-medium-text text-lg">{definition || 'No definition found.'}</p>
+            {exampleSentence && (
+              <div className="border-l-4 border-indigo-200 pl-4 py-2 bg-indigo-50/70 rounded-r-md">
+                <p className="font-semibold font-serif text-indigo-800">{exampleSentence}</p>
+                <p className="text-sm text-indigo-700 italic mt-1">"{exampleTranslation}"</p>
+              </div>
+            )}
+          </>
         )}
       </div>
       <div className="mt-auto pt-4 border-t border-gray-200">
@@ -110,21 +111,24 @@ export const WordDetailPanel: React.FC<WordDetailPanelProps> = ({ word, isLoadin
             currentStatus={WordStatus.New}
             buttonStatus={WordStatus.New}
             label="New"
-            colorClass="bg-blue-500"
+            colorClass="text-blue-600 border-blue-300"
+            activeColorClass="bg-blue-500 border-blue-500"
           />
           <StatusButton
             onClick={() => onStatusChange(word, WordStatus.Learning)}
             currentStatus={WordStatus.Learning}
             buttonStatus={WordStatus.Learning}
             label="Learning"
-            colorClass="bg-yellow-500"
+            colorClass="text-yellow-600 border-yellow-400"
+            activeColorClass="bg-yellow-500 border-yellow-500"
           />
           <StatusButton
             onClick={() => onStatusChange(word, WordStatus.Known)}
             currentStatus={WordStatus.Known}
             buttonStatus={WordStatus.Known}
             label="Known"
-            colorClass="bg-green-500"
+            colorClass="text-green-600 border-green-400"
+            activeColorClass="bg-green-500 border-green-500"
           />
         </div>
       </div>

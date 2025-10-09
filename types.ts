@@ -1,3 +1,4 @@
+import type { WordDefinition } from './services/geminiService';
 
 export enum WordStatus {
   New = 1,
@@ -8,10 +9,11 @@ export enum WordStatus {
 export interface Word {
   text: string;
   normalized: string;
-  definition: string | null;
+  definition: WordDefinition | null;
 }
 
 export type Vocabulary = Map<string, WordStatus>;
+export type GlobalVocabulary = Map<string, Vocabulary>; // Key is language string
 
 export interface TextDocument {
   id: string;
