@@ -7,7 +7,6 @@ interface ReadingPanelProps {
   vocabulary: Vocabulary;
   onWordClick: (word: Word) => void;
   selectedWord: Word | null;
-  spokenWordNormalized: string | null;
 }
 
 const getStatusHighlightClass = (status: WordStatus) => {
@@ -24,7 +23,7 @@ const getStatusHighlightClass = (status: WordStatus) => {
 
 const isWord = (text: string): boolean => /^[a-zA-ZÀ-ÿ'-]+$/.test(text);
 
-export const ReadingPanel: React.FC<ReadingPanelProps> = ({ text, vocabulary, onWordClick, selectedWord, spokenWordNormalized }) => {
+export const ReadingPanel: React.FC<ReadingPanelProps> = ({ text, vocabulary, onWordClick, selectedWord }) => {
 
   const parsedText = useMemo(() => {
     // This regex splits the text into words (including apostrophes/hyphens) and non-word characters (spaces, punctuation).
@@ -50,12 +49,9 @@ export const ReadingPanel: React.FC<ReadingPanelProps> = ({ text, vocabulary, on
 
             const status = vocabulary.get(normalized) || WordStatus.New;
             const isSelected = selectedWord?.normalized === normalized;
-            const isSpoken = spokenWordNormalized === normalized;
 
             let highlightClass: string;
-            if (isSpoken) {
-                highlightClass = 'bg-purple-400/40';
-            } else if (isSelected) {
+            if (isSelected) {
                 highlightClass = 'bg-primary/30';
             } else {
                 highlightClass = getStatusHighlightClass(status);

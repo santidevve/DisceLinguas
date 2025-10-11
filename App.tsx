@@ -6,16 +6,18 @@ import { WordDetailPanel } from './components/WordDetailPanel';
 import { VocabularyPage } from './components/VocabularyPage';
 import { LearningHub } from './components/learning/LearningHub';
 import { LessonView } from './components/learning/LessonView';
+import { PronunciationPractice } from './components/learning/PronunciationPractice';
 import { vocabularyService } from './services/vocabularyService';
 import { textService } from './services/textService';
 import { geminiService } from './services/geminiService';
 import { streakService } from './services/streakService';
 import { ttsService } from './services/ttsService';
+import { SUPPORTED_LANGUAGES } from './constants';
 import { WordStatus } from './types';
 import type { GlobalVocabulary, Word, TextDocument } from './types';
 import { SpinnerIcon, PlayIcon, PauseIcon, StopIcon } from './components/IconComponents';
 
-type View = 'home' | 'importer' | 'reading' | 'vocabulary' | 'learningHub' | 'lesson';
+type View = 'home' | 'importer' | 'reading' | 'vocabulary' | 'learningHub' | 'lesson' | 'pronunciationPractice';
 
 function App() {
   const [texts, setTexts] = useState<TextDocument[]>([]);
@@ -29,22 +31,7 @@ function App() {
   // State for text-to-speech
   const [isReadingAloud, setIsReadingAloud] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [spokenWord, setSpokenWord] = useState<string | null>(null);
-
-  const wordBoundaries = useMemo(() => {
-    if (!activeText) return [];
-    const boundaries: { text: string; normalized: string; startIndex: number }[] = [];
-    const regex = /([\w'-]+)/g;
-    let match;
-    while ((match = regex.exec(activeText.content)) !== null) {
-        boundaries.push({
-            text: match[0],
-            normalized: match[0].toLowerCase(),
-            startIndex: match.index,
-        });
-    }
-    return boundaries;
-  }, [activeText]);
+  const [ttsGlobalLanguage, setTtsGlobalLanguage] = useState<string | null>(null);
 
 
   useEffect(() => {
@@ -68,13 +55,13 @@ function App() {
     ttsService.stop();
     setIsReadingAloud(false);
     setIsPaused(false);
-    setSpokenWord(null);
   }, []);
 
   const handleImport = (importedText: string, importedLanguage: string) => {
     const newText = textService.saveText(importedText, importedLanguage);
     setTexts(prevTexts => [...prevTexts, newText]);
     setActiveText(newText);
+    setTtsGlobalLanguage(importedLanguage);
     setCurrentView('reading');
     setSelectedWord(null);
   };
@@ -83,6 +70,7 @@ function App() {
     const textToRead = texts.find(t => t.id === id);
     if (textToRead) {
       setActiveText(textToRead);
+      setTtsGlobalLanguage(textToRead.language);
       setCurrentView('reading');
       setSelectedWord(null);
     }
@@ -121,6 +109,7 @@ function App() {
     setActiveText(null);
     setSelectedWord(null);
     setActiveLearningLanguage(null);
+    setTtsGlobalLanguage(null);
     setCurrentView('home');
   };
 
@@ -140,14 +129,27 @@ function App() {
     setCurrentView('learningHub');
   };
 
+  const handleStartPronunciationPractice = (language: string) => {
+    setActiveLearningLanguage(language);
+    setCurrentView('pronunciationPractice');
+  };
+
   const handleLessonComplete = () => {
     if (!activeLearningLanguage) return;
     streakService.updateStreak(activeLearningLanguage);
     setCurrentView('learningHub');
   };
 
+  const handleTtsLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newLang = e.target.value;
+    setTtsGlobalLanguage(newLang);
+    if (isReadingAloud) {
+        stopReadingAloud();
+    }
+  };
+
   const handlePlayPauseReading = () => {
-    if (!activeText) return;
+    if (!activeText || !ttsGlobalLanguage) return;
 
     if (isReadingAloud && !isPaused) {
         ttsService.pause();
@@ -158,7 +160,7 @@ function App() {
     } else {
         stopReadingAloud(); // Clear any previous state
         
-        ttsService.speak(activeText.content, activeText.language, {
+        ttsService.speak(activeText.content, ttsGlobalLanguage, {
             onStart: () => {
                 setIsReadingAloud(true);
                 setIsPaused(false);
@@ -170,16 +172,6 @@ function App() {
                 console.error("Speech Synthesis Error", error);
                 stopReadingAloud();
             },
-            onBoundary: (event) => {
-                if (event.name === 'word') {
-                    const currentWord = wordBoundaries.findLast(
-                        (word) => word.startIndex < event.charIndex
-                    );
-                    if (currentWord) {
-                        setSpokenWord(currentWord.normalized);
-                    }
-                }
-            }
         });
     }
   };
@@ -194,6 +186,7 @@ function App() {
         language={activeLearningLanguage}
         globalVocabulary={vocabulary} 
         onStartLesson={() => setCurrentView('lesson')} 
+        onStartPronunciationPractice={() => handleStartPronunciationPractice(activeLearningLanguage)}
         onGoHome={goHome} 
         onShowVocabulary={() => setCurrentView('vocabulary')}
       />
@@ -212,6 +205,20 @@ function App() {
         onLessonComplete={handleLessonComplete} 
         onExit={() => setCurrentView('learningHub')} 
       />
+    );
+  }
+
+  if (currentView === 'pronunciationPractice') {
+    if (!activeLearningLanguage) {
+        goHome();
+        return null;
+    }
+    return (
+        <PronunciationPractice
+            language={activeLearningLanguage}
+            globalVocabulary={vocabulary}
+            onExit={() => setCurrentView('learningHub')}
+        />
     );
   }
 
@@ -261,23 +268,43 @@ function App() {
                     {activeText.title}
                 </h1>
             </div>
-            <div className="flex items-center gap-2 mx-4">
-                <button
-                    onClick={handlePlayPauseReading}
-                    className="p-2 text-gray-600 hover:text-primary hover:bg-indigo-100 rounded-full transition-colors"
-                    title={isReadingAloud && !isPaused ? "Pause" : "Play"}
-                >
-                    {isReadingAloud && !isPaused ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6" />}
-                </button>
-                {isReadingAloud && (
+            <div className="flex items-center gap-2 sm:gap-4 mx-4">
+                 <div className="flex items-center gap-2">
                     <button
-                        onClick={stopReadingAloud}
-                        className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-100 rounded-full transition-colors"
-                        title="Stop"
+                        onClick={handlePlayPauseReading}
+                        className="p-2 text-gray-600 hover:text-primary hover:bg-indigo-100 rounded-full transition-colors"
+                        title={isReadingAloud && !isPaused ? "Pause" : "Play"}
                     >
-                        <StopIcon className="w-6 h-6" />
+                        {isReadingAloud && !isPaused ? <PauseIcon className="w-6 h-6" /> : <PlayIcon className="w-6 h-6" />}
                     </button>
-                )}
+                    {isReadingAloud && (
+                        <button
+                            onClick={stopReadingAloud}
+                            className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-100 rounded-full transition-colors"
+                            title="Stop"
+                        >
+                            <StopIcon className="w-6 h-6" />
+                        </button>
+                    )}
+                </div>
+                 <div className="flex items-center gap-2">
+                    <label htmlFor="tts-global-language-select" className="text-sm font-medium text-gray-600 hidden sm:block">
+                        Speech:
+                    </label>
+                    <select
+                        id="tts-global-language-select"
+                        value={ttsGlobalLanguage || ''}
+                        onChange={handleTtsLanguageChange}
+                        className="block w-full pl-2 pr-8 py-1 text-sm bg-gray-50 border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary transition-all duration-200"
+                        aria-label="Select speech language for the whole text"
+                    >
+                        {SUPPORTED_LANGUAGES.map((lang) => (
+                            <option key={lang} value={lang}>
+                                {lang}
+                            </option>
+                        ))}
+                    </select>
+                </div>
             </div>
             <div className="flex-1 flex justify-end">
                 <button
@@ -296,7 +323,6 @@ function App() {
               vocabulary={vocabulary.get(activeText.language) || new Map()}
               onWordClick={handleWordClick}
               selectedWord={selectedWord}
-              spokenWordNormalized={spokenWord}
             />
           </div>
           <div className="min-h-0">

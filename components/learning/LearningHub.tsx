@@ -2,12 +2,13 @@ import React from 'react';
 import { WordStatus, GlobalVocabulary, Vocabulary } from '../../types';
 import { lessonService } from '../../services/lessonService';
 import { streakService } from '../../services/streakService';
-import { VocabularyIcon, FlameIcon, BrainIcon, LightbulbIcon } from '../IconComponents';
+import { VocabularyIcon, FlameIcon, BrainIcon, LightbulbIcon, CheckCircleIcon, MicrophoneIcon } from '../IconComponents';
 
 interface LearningHubProps {
     language: string;
     globalVocabulary: GlobalVocabulary;
     onStartLesson: () => void;
+    onStartPronunciationPractice: () => void;
     onGoHome: () => void;
     onShowVocabulary: () => void;
 }
@@ -24,11 +25,13 @@ const StatCard: React.FC<{ title: string; value: number; colorClass: string; ico
     </div>
 );
 
-export const LearningHub: React.FC<LearningHubProps> = ({ language, globalVocabulary, onStartLesson, onGoHome, onShowVocabulary }) => {
+export const LearningHub: React.FC<LearningHubProps> = ({ language, globalVocabulary, onStartLesson, onStartPronunciationPractice, onGoHome, onShowVocabulary }) => {
     const vocabularyForLang = globalVocabulary.get(language) || new Map();
     const learningWordsCount = Array.from(vocabularyForLang.values()).filter(s => s === WordStatus.Learning).length;
     const newWordsCount = Array.from(vocabularyForLang.values()).filter(s => s === WordStatus.New).length;
-    const canStart = lessonService.canStartLesson(globalVocabulary, language);
+    const knownWordsCount = Array.from(vocabularyForLang.values()).filter(s => s === WordStatus.Known).length;
+    const canStartLesson = lessonService.canStartLesson(globalVocabulary, language);
+    const canPracticePronunciation = (learningWordsCount + knownWordsCount) > 0;
     const streak = streakService.getStreak(language);
 
     return (
@@ -49,22 +52,36 @@ export const LearningHub: React.FC<LearningHubProps> = ({ language, globalVocabu
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
                     <StatCard title="Words Learning" value={learningWordsCount} colorClass="border-yellow-400" icon={<BrainIcon className="w-8 h-8 text-yellow-500" />} />
+                    <StatCard title="Known Words" value={knownWordsCount} colorClass="border-green-400" icon={<CheckCircleIcon className="w-8 h-8 text-green-500" />} />
                     <StatCard title="New Words" value={newWordsCount} colorClass="border-blue-400" icon={<LightbulbIcon className="w-8 h-8 text-blue-500" />} />
                 </div>
 
                 <div className="bg-white rounded-xl shadow-lg p-6 space-y-4 ring-1 ring-black/5">
                     <button 
                         onClick={onStartLesson}
-                        disabled={!canStart}
+                        disabled={!canStartLesson}
                         className="w-full py-4 px-6 text-xl font-bold text-white bg-primary rounded-lg shadow-md hover:bg-indigo-700 transition-transform transform hover:scale-105 disabled:bg-indigo-300 disabled:cursor-not-allowed disabled:transform-none"
                     >
                         Start Lesson
                     </button>
-                    {!canStart && (
+                    {!canStartLesson && (
                         <p className="text-sm text-gray-500">
                             You need at least 4 "New" or "Learning" words in {language} to start a lesson. Keep reading to build your vocabulary!
+                        </p>
+                    )}
+                     <button
+                        onClick={onStartPronunciationPractice}
+                        disabled={!canPracticePronunciation}
+                        className="w-full flex items-center justify-center gap-2 py-3 px-4 border border-transparent rounded-lg shadow-sm text-lg font-medium text-white bg-secondary hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-secondary/50 transition-colors duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                        <MicrophoneIcon className="w-5 h-5"/>
+                        Practice Pronunciation
+                    </button>
+                    {!canPracticePronunciation && (
+                        <p className="text-sm text-gray-500">
+                            You need at least one "Learning" or "Known" word to practice pronunciation.
                         </p>
                     )}
                      <button

@@ -63,5 +63,7 @@ export const languageCodeMap: { [key: string]: string } = {
 };
 
 export const getLanguageCode = (languageName: string): string => {
+  console.log(languageName);
+  console.log(languageCodeMap[languageName] || 'en-US';)
   return languageCodeMap[languageName] || 'en-US'; // Default to English if not found
 };

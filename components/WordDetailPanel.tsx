@@ -3,6 +3,7 @@ import { WordStatus } from '../types';
 import type { Word } from '../types';
 import { SpinnerIcon, BookOpenIcon, SpeakerIcon } from './IconComponents';
 import { ttsService } from '../services/ttsService';
+import { SUPPORTED_LANGUAGES } from '../constants';
 
 interface WordDetailPanelProps {
   word: Word | null;
@@ -36,6 +37,12 @@ const StatusButton: React.FC<{
 
 export const WordDetailPanel: React.FC<WordDetailPanelProps> = ({ word, isLoading, onStatusChange, language }) => {
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [ttsLanguage, setTtsLanguage] = useState(language);
+
+  useEffect(() => {
+    // When the word changes, reset the TTS language to the text's default language.
+    setTtsLanguage(language);
+  }, [word, language]);
 
   useEffect(() => {
     // Cleanup: stop any speech when the word changes or component unmounts.
@@ -50,7 +57,7 @@ export const WordDetailPanel: React.FC<WordDetailPanelProps> = ({ word, isLoadin
       return;
     }
 
-    ttsService.speak(word.text, language, {
+    ttsService.speak(word.text, ttsLanguage, {
       onStart: () => setIsSpeaking(true),
       onEnd: () => setIsSpeaking(false),
       onError: (error) => {
@@ -74,7 +81,7 @@ export const WordDetailPanel: React.FC<WordDetailPanelProps> = ({ word, isLoadin
 
   return (
     <div className="flex flex-col h-full bg-white p-6 rounded-xl shadow-lg ring-1 ring-black/5">
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center flex-wrap gap-x-3 gap-y-2 mb-4">
         <h2 className="text-4xl font-bold text-primary break-words">{word.text}</h2>
         <button
           onClick={handleSpeak}
@@ -85,6 +92,21 @@ export const WordDetailPanel: React.FC<WordDetailPanelProps> = ({ word, isLoadin
         >
           <SpeakerIcon className={`w-7 h-7 ${isSpeaking ? 'text-primary animate-pulse' : ''}`} />
         </button>
+        <div className="flex-1 min-w-[150px]">
+            <select
+                id="tts-language-select"
+                value={ttsLanguage}
+                onChange={(e) => setTtsLanguage(e.target.value)}
+                className="block w-full pl-2 pr-8 py-1 text-sm bg-gray-50 border-gray-200 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary transition-all duration-200"
+                aria-label="Select pronunciation language"
+            >
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                    <option key={lang} value={lang}>
+                        {lang}
+                    </option>
+                ))}
+            </select>
+        </div>
       </div>
       <div className="flex-grow overflow-y-auto mb-4 pr-2 space-y-4">
         {isLoading ? (

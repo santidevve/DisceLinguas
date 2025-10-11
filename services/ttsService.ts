@@ -1,108 +1,100 @@
-import { getLanguageCode } from '../constants';
+import { geminiService } from './geminiService';
 
-let voices: SpeechSynthesisVoice[] = [];
+// Module-level state
+let currentAudio: HTMLAudioElement | null = null;
 
-// This function fetches and caches the list of available voices.
-const loadVoices = () => {
-  voices = window.speechSynthesis.getVoices();
-};
+// Cache to store generated audio to avoid repeated API calls
+// Key: language:text, Value: Blob URL string
+const audioCache = new Map<string, string>();
 
-// The 'voiceschanged' event is fired when the list of voices is ready.
-if ('speechSynthesis' in window) {
-  loadVoices();
-  if (window.speechSynthesis.onvoiceschanged !== undefined) {
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-  }
+function base64ToBlobUrl(base64: string, mimeType: string): string {
+    try {
+        const byteCharacters = atob(base64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: mimeType });
+        return URL.createObjectURL(blob);
+    } catch (e) {
+        console.error("Error converting base64 to Blob URL:", e);
+        throw e;
+    }
 }
 
-// This function attempts to find the best available voice for a given language.
-const findBestVoice = (languageCode: string): SpeechSynthesisVoice | null => {
-  if (voices.length === 0) {
-    // Voices might not have been loaded yet, which can happen on some browsers.
-    loadVoices();
-  }
-
-  const langVoices = voices.filter(v => v.lang === languageCode);
-  if (langVoices.length === 0) return null;
-
-  // Preference order for finding a "better" voice.
-  // We prefer voices with common high-quality provider names and non-local voices.
-  const preferences = [
-    (v: SpeechSynthesisVoice) => v.name.includes('Google'),
-    (v: SpeechSynthesisVoice) => v.name.includes('Microsoft'),
-    (v: SpeechSynthesisVoice) => !v.localService,
-  ];
-
-  for (const pref of preferences) {
-    const found = langVoices.find(pref);
-    if (found) return found;
-  }
-
-  // As a fallback, return the first available voice for that language.
-  return langVoices[0];
+// Clean up old blob URLs to prevent memory leaks
+const cleanupCache = () => {
+    const MAX_CACHE_SIZE = 50;
+    if (audioCache.size > MAX_CACHE_SIZE) {
+        const oldestKey = audioCache.keys().next().value;
+        const oldUrl = audioCache.get(oldestKey);
+        if (oldUrl) {
+            URL.revokeObjectURL(oldUrl);
+        }
+        audioCache.delete(oldestKey);
+    }
 };
 
 export const ttsService = {
-  speak: (text: string, language: string, callbacks: { onStart: () => void; onEnd: () => void; onError: (e: any) => void; onBoundary?: (e: SpeechSynthesisEvent) => void; }) => {
-    if (!('speechSynthesis' in window)) {
-      console.warn('Speech synthesis not supported.');
-      callbacks.onError('Speech synthesis not supported by this browser.');
-      return null;
-    }
-
-    // It's good practice to stop any currently speaking utterance before starting a new one.
-    window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(text);
-    const languageCode = getLanguageCode(language);
+  speak: async (text: string, language: string, callbacks: { onStart: () => void; onEnd: () => void; onError: (e: any) => void; onBoundary?: (e: SpeechSynthesisEvent) => void; }) => {
     
-    utterance.lang = languageCode;
-    const bestVoice = findBestVoice(languageCode);
-    if (bestVoice) {
-      utterance.voice = bestVoice;
-    }
+    ttsService.stop(); // Stop any currently playing audio
+    callbacks.onStart();
+    const cacheKey = `${language}:${text}`;
 
-    utterance.onstart = callbacks.onStart;
-    utterance.onend = callbacks.onEnd;
-    utterance.onerror = (event) => {
-        callbacks.onError(event.error);
-    };
+    try {
+        let blobUrl = audioCache.get(cacheKey);
 
-    if (callbacks.onBoundary) {
-        utterance.onboundary = callbacks.onBoundary;
-    }
+        if (!blobUrl) {
+            const result = await geminiService.generateSpeech(text, language);
+            if (!result) {
+                throw new Error("No audio data received from API.");
+            }
+            blobUrl = base64ToBlobUrl(result.audioBase64, result.mimeType);
+            audioCache.set(cacheKey, blobUrl);
+            cleanupCache();
+        }
 
-    // On some browsers, the voice list is loaded asynchronously.
-    // If no voices were ready on initial load, we speak after they have changed.
-    if (voices.length === 0) {
-        window.speechSynthesis.onvoiceschanged = () => {
-            loadVoices();
-            const voice = findBestVoice(languageCode);
-            if(voice) utterance.voice = voice;
-            window.speechSynthesis.speak(utterance);
+        currentAudio = new Audio(blobUrl);
+        
+        currentAudio.onended = () => {
+            callbacks.onEnd();
+            currentAudio = null;
         };
-    } else {
-        window.speechSynthesis.speak(utterance);
+        currentAudio.onerror = (e) => {
+            callbacks.onError(e);
+            currentAudio = null;
+        };
+        
+        // Note: The onBoundary callback for word-by-word highlighting is not supported
+        // with this audio playback method, as it was with the SpeechSynthesis API.
+
+        await currentAudio.play();
+
+    } catch (error) {
+        callbacks.onError(error);
+        currentAudio = null;
     }
-    
-    return utterance;
   },
 
   stop: () => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.src = ''; // Detach the source to stop download
+      currentAudio = null;
     }
   },
 
   pause: () => {
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.pause();
+    if (currentAudio) {
+      currentAudio.pause();
     }
   },
 
   resume: () => {
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.resume();
+    if (currentAudio) {
+      currentAudio.play();
     }
   }
 };

@@ -97,4 +97,16 @@ export const lessonService = {
 
     return { questions: shuffle(questions) };
   },
+
+  getPronunciationPracticeWords: (globalVocabulary: GlobalVocabulary, language: string): string[] => {
+    const vocabulary = globalVocabulary.get(language);
+    if (!vocabulary) return [];
+
+    // Practice with words they are learning or already know
+    const practiceWords = Array.from(vocabulary.entries())
+      .filter(([, status]) => status === WordStatus.Learning || status === WordStatus.Known)
+      .map(([word]) => word);
+      
+    return shuffle(practiceWords);
+  },
 };

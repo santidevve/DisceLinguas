@@ -1,5 +1,7 @@
 {
   "name": "Lingua Reader",
   "description": "An application to help users read texts in any language, similar to LingQ. Users can import text, click on words to get definitions, and track their vocabulary knowledge (New, Learning, Known).",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "microphone"
+  ]
 }

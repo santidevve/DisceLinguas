@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, Modality } from "@google/genai";
 import type { Word } from '../types';
 
 const API_KEY = process.env.API_KEY;
@@ -14,6 +14,12 @@ export interface WordDefinition {
     definition: string;
     exampleSentence: string;
     exampleTranslation: string;
+}
+
+export interface PronunciationFeedback {
+    score: number;
+    feedback: string;
+    isCorrect: boolean;
 }
 
 
@@ -119,6 +125,110 @@ export const geminiService = {
     } catch (error) {
       console.error("Error fetching text from URL via Gemini API:", error);
       throw new Error("Failed to extract text from the provided URL. The site may be inaccessible or the content too complex.");
+    }
+  },
+
+  generateSpeech: async (text: string, language: string): Promise<{audioBase64: string, mimeType: string} | null> => {
+    if (!API_KEY) {
+        console.warn("API key is not configured.");
+        return null;
+    }
+    
+    const prompt = `Please act as a text-to-speech engine. Your only task is to read the following text aloud in a natural-sounding, clear ${language} voice. Do not add any commentary, introduction, or extra words. Just speak the provided text. The text is: "${text}"`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+            contents: prompt,
+            config: {
+                responseModalities: [Modality.AUDIO],
+            },
+        });
+
+        if (response.candidates && response.candidates.length > 0) {
+            for (const part of response.candidates[0].content.parts) {
+                if (part.inlineData && part.inlineData.mimeType.startsWith('audio/')) {
+                    return {
+                        audioBase64: part.inlineData.data,
+                        mimeType: part.inlineData.mimeType
+                    };
+                }
+            }
+        }
+        console.warn("No audio data found in Gemini response.");
+        return null;
+
+    } catch (error) {
+        console.error("Error generating speech from Gemini API:", error);
+        return null;
+    }
+  },
+
+  evaluatePronunciation: async (word: string, language: string, audioBase64: string, mimeType: string): Promise<PronunciationFeedback> => {
+    if (!API_KEY) {
+        return Promise.resolve({
+            score: 0,
+            feedback: "API key is not configured.",
+            isCorrect: false,
+        });
+    }
+
+    const audioPart = {
+      inlineData: {
+        mimeType: mimeType,
+        data: audioBase64,
+      },
+    };
+
+    const prompt = `You are an expert language pronunciation tutor. A student is practicing the pronunciation of the word "${word}" in the ${language} language. 
+    Analyze the provided audio recording. 
+    1. Determine if the pronunciation is correct or incorrect.
+    2. Provide a score from 0 to 100, where 100 is a perfect native-like pronunciation.
+    3. Give one single, concise, and actionable tip for improvement if needed. If the pronunciation is excellent, the feedback can be a simple compliment.`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: { parts: [audioPart, {text: prompt}] },
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        isCorrect: {
+                            type: Type.BOOLEAN,
+                            description: 'Whether the pronunciation is fundamentally correct or not.'
+                        },
+                        score: {
+                            type: Type.INTEGER,
+                            description: 'A score from 0 to 100 for the pronunciation accuracy.'
+                        },
+                        feedback: {
+                            type: Type.STRING,
+                            description: 'A concise, actionable tip for improvement or a compliment.'
+                        }
+                    },
+                    required: ['isCorrect', 'score', 'feedback']
+                }
+            }
+        });
+
+        const jsonText = response.text.trim();
+        const parsed = JSON.parse(jsonText);
+
+        if (parsed && typeof parsed.score === 'number' && typeof parsed.feedback === 'string' && typeof parsed.isCorrect === 'boolean') {
+            return parsed;
+        } else {
+            throw new Error("Parsed JSON does not match the expected PronunciationFeedback format.");
+        }
+
+    } catch (error) {
+        console.error("Error fetching or parsing pronunciation feedback from Gemini API:", error);
+        return {
+            score: 0,
+            feedback: "Could not get feedback. The model may have had an issue processing the audio.",
+            isCorrect: false,
+        };
     }
   },
 };
